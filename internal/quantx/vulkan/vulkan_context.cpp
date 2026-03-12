@@ -1,3 +1,4 @@
+//go:build !darwin
 #ifdef USE_VULKAN
 #include "vulkan_context.hpp"
 #include "quantx_vulkan_spv.h"

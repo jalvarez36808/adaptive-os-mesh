@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"runtime"
 	"testing"
 )
 
@@ -23,8 +24,12 @@ func TestLayerPartitioning(t *testing.T) {
 
 	for _, tt := range tests {
 		got := s.RouteLayer(tt.layerID)
-		if got != tt.expected {
-			t.Errorf("Layer %d routing failed: got %s, want %s", tt.layerID, got, tt.expected)
+		expected := tt.expected
+		if runtime.GOOS == "darwin" {
+			expected = "MAC_OLLAMA"
+		}
+		if got != expected {
+			t.Errorf("Layer %d routing failed: got %s, want %s", tt.layerID, got, expected)
 		}
 	}
 }

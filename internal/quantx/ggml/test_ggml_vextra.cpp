@@ -1,3 +1,4 @@
+//go:build !darwin
 #include "ggml.h"
 #include "ggml-backend.h"
 #include "ggml_vextra.h"

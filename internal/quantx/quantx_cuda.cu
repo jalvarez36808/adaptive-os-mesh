@@ -1,4 +1,5 @@
 #include "quantx.h"
+//go:build !darwin
 #include <cuda_runtime.h>
 #include <stdint.h>
 

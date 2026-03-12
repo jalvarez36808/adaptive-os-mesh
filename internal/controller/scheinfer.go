@@ -46,6 +46,13 @@ func NewScheInfer(l3Size uint64, gpuName string, computeCap int, avx512 bool) *S
 
 // RouteTask determines the optimal execution provider for a given tensor size.
 func (s *ScheInfer) RouteTask(dataSizeBytes uint64) string {
+	// If running on macOS, bypass all low-level hardware inference logic 
+	// and route directly to the local Ollama API.
+	if runtime.GOOS == "darwin" {
+		log.Printf("[ScheInfer] macOS Node detected: Routing to MAC_OLLAMA")
+		return "MAC_OLLAMA"
+	}
+
 	// If the data fits within the CPU's L3 cache, route to CPU to avoid PCIe transfer overhead.
 	if dataSizeBytes < s.l3CacheSize {
 		log.Printf("[ScheInfer] Cache-Resident Task (%d KB): Routing to CPU AVX2", dataSizeBytes/1024)
@@ -75,6 +82,10 @@ func (s *ScheInfer) RouteTask(dataSizeBytes uint64) string {
 
 // RouteLayer implements Smart Layer Partitioning (Task 10.2)
 func (s *ScheInfer) RouteLayer(layerID int) string {
+	if runtime.GOOS == "darwin" {
+		return "MAC_OLLAMA"
+	}
+
 	// Heuristic: Pin first half of layers to GPU (Compute-heavy), 
 	// second half to CPU (Latency-sensitive reasoning)
 	if layerID < 16 {
@@ -87,6 +98,10 @@ func (s *ScheInfer) RouteLayer(layerID int) string {
 
 // GetMeshCapability returns the node's performance profile for the Global Mesh
 func (s *ScheInfer) GetMeshCapability() string {
+	if runtime.GOOS == "darwin" {
+		return "MAC:OLLAMA"
+	}
+
 	profile := fmt.Sprintf("CPU:%d cores", runtime.NumCPU())
 	if s.hasCuda {
 		profile += " | GPU:CUDA(Ampere)"

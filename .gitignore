@@ -22,3 +22,5 @@ local_research/
 node_c_report/
 workload_execution.jsonl
 __mocks__/
+vectors.json
+.venv/

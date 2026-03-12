@@ -17,8 +17,8 @@ func TestMeshRegistryMetrics(t *testing.T) {
 	})
 
 	// 2. Record multiple metrics
-	r.RecordMetrics(agentID, 100.0, 50)
-	r.RecordMetrics(agentID, 200.0, 150)
+	r.RecordMetrics(agentID, 100.0, 50, 10.0)
+	r.RecordMetrics(agentID, 200.0, 150, 12.0)
 
 	// 3. Verify Stats
 	stats := r.GetStatsSummary()

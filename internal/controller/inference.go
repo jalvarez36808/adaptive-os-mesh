@@ -10,12 +10,14 @@ import (
 
 // InferenceController handles hardware-aware LLM requests
 type InferenceController struct {
-	scheduler *ScheInfer
+	scheduler    *ScheInfer
+	ollamaClient *OllamaClient
 }
 
 func NewInferenceController(scheduler *ScheInfer) *InferenceController {
 	return &InferenceController{
-		scheduler: scheduler,
+		scheduler:    scheduler,
+		ollamaClient: NewOllamaClient("", ""), // Uses default http://localhost:11434 and llama3.2
 	}
 }
 
@@ -33,6 +35,24 @@ func (c *InferenceController) Generate(ctx context.Context, req *pb.InferenceReq
 
 	hardwarePath := c.scheduler.RouteTask(dataSize)
 	log.Printf("[Inference] Request from %s. Size: %d bytes. Path: %s", req.AgentId, dataSize, hardwarePath)
+
+	// --- macOS Ollama Path ---
+	if hardwarePath == "MAC_OLLAMA" {
+		log.Printf("[Inference] Executing via Ollama...")
+		resp, err := c.ollamaClient.Generate(ctx, req)
+		if err != nil {
+			return nil, fmt.Errorf("failed inference via ollama: %w", err)
+		}
+		
+		return &pb.InferenceResponse{
+			Text:          resp.Response,
+			TokensUsed:    uint32(resp.EvalCount), // rough equivalent
+			HardwarePath:  hardwarePath,
+			LatencyMs:     float32(time.Since(start).Milliseconds()),
+			ThroughputGbs: 0.0, // Not applicable for external API
+			Avx512Usage:   false,
+		}, nil
+	}
 
 	// Simulation: Actual LLM work
 	// In a full implementation, this would call llama.cpp or a Gemini bridge

@@ -8,7 +8,9 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -42,14 +44,27 @@ func (t *SoftThrottle) IsNovel(query string) bool {
 }
 
 type QdrantController struct {
-	throttle   *SoftThrottle
-	serviceURL string
+	throttle    *SoftThrottle
+	serviceURL  string
+	vectorStore *VectorStore
 }
 
 func NewQdrantController() *QdrantController {
+	client := NewOllamaClient("", "")
+	vs := NewVectorStore(client)
+
+	// Try to load persisted vectors on startup
+	storePath := "vectors.json"
+	if _, err := os.Stat(storePath); err == nil {
+		if err := vs.LoadFromFile(storePath); err != nil {
+			log.Printf("[Qdrant] Warning: could not load vector store: %v", err)
+		}
+	}
+
 	return &QdrantController{
-		throttle:   NewSoftThrottle(),
-		serviceURL: "http://127.0.0.1:5000/search",
+		throttle:    NewSoftThrottle(),
+		serviceURL:  "http://127.0.0.1:5000/search",
+		vectorStore: vs,
 	}
 }
 
@@ -57,6 +72,36 @@ func (q *QdrantController) Search(ctx context.Context, req *pb.SearchRequest) (*
 	if !q.throttle.IsNovel(req.Query) {
 		return &pb.SearchResponse{
 			ReasoningContext: "THROTTLED: Redundant semantic search detected.",
+		}, nil
+	}
+
+	// On macOS, use the in-process vector store if populated
+	if runtime.GOOS == "darwin" && q.vectorStore.Count() > 0 {
+		log.Printf("[Mesh] 🔍 Vector Search (In-Process): %s", req.Query)
+
+		maxResults := int(req.MaxResults)
+		if maxResults == 0 {
+			maxResults = 3
+		}
+
+		results, err := q.vectorStore.Search(ctx, req.Query, maxResults)
+		if err != nil {
+			log.Printf("[Mesh] ⚠️ Vector search failed, falling back: %v", err)
+			return q.performGrepFallback(req.Query)
+		}
+
+		pbResults := make([]*pb.SearchResult, len(results))
+		for i, r := range results {
+			pbResults[i] = &pb.SearchResult{
+				Source:  r.Document.Source,
+				Content: r.Document.Content,
+				Score:   float32(r.Similarity),
+			}
+		}
+
+		return &pb.SearchResponse{
+			Results:          pbResults,
+			ReasoningContext: "Grounded in local vector store (Ollama nomic-embed-text).",
 		}, nil
 	}
 

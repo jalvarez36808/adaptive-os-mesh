@@ -1,3 +1,4 @@
+//go:build !darwin
 #include "quantx.h"
 #include <immintrin.h>
 #include <stdint.h>
